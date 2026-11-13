@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# env: テンプレートだけはコミットする
+!.env.example
+
+# git worktree（並列開発用の作業ツリー）
+/.worktrees/
