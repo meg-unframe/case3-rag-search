@@ -38,8 +38,19 @@ export const EMBEDDING = {
 
 export const RETRIEVAL = {
   matchCount: Number(process.env.RAG_MATCH_COUNT ?? 5),
-  /** cosine 類似度のしきい値。これ未満しかなければ Claude を呼ばず「該当なし」。評価で調整する */
-  matchThreshold: Number(process.env.RAG_MATCH_THRESHOLD ?? 0.5),
+  /**
+   * cosine 類似度のしきい値。これ未満しかなければ Claude を呼ばず「該当なし」。
+   * 取り込み前で実測値がないため、取りこぼしを避けて低めに置き、該当なしの最終判定は Claude に任せる。
+   * 12 問評価の類似度分布を見て調整する。
+   */
+  matchThreshold: Number(process.env.RAG_MATCH_THRESHOLD ?? 0.3),
 } as const;
 
 export const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-5-5";
+
+const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+type Effort = (typeof EFFORTS)[number];
+/** 短い資料からの事実回答なので low を既定にする（評価で品質を見て調整） */
+export const CLAUDE_EFFORT: Effort = (EFFORTS as readonly string[]).includes(process.env.CLAUDE_EFFORT ?? "")
+  ? (process.env.CLAUDE_EFFORT as Effort)
+  : "low";

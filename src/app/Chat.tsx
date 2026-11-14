@@ -81,7 +81,7 @@ function TurnView({ turn }: { turn: Turn }) {
   const { answer, citations, found } = turn.result;
   return (
     <div className="max-w-[85%] space-y-2 rounded-lg border border-zinc-200 px-4 py-3 dark:border-zinc-800">
-      <p className="whitespace-pre-wrap">{answer}</p>
+      <p className={`whitespace-pre-wrap ${found ? "" : "text-zinc-500"}`}>{answer}</p>
       {found && citations.length > 0 && (
         <ul className="space-y-0.5 border-t border-zinc-200 pt-2 text-xs text-zinc-500 dark:border-zinc-800">
           {citations.map((c) => (
