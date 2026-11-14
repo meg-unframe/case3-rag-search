@@ -15,12 +15,12 @@
 | 範囲 | 状態 |
 |---|---|
 | CSV 補正（`data/eval/test-questions.csv`） | ✅ 完了（5・6 番の金額カンマを結合、全 12 問 6 列） |
-| PDF 抽出・正規化・チャンク分割 | ✅ 完了（キー不要で `npm run ingest:dry` で確認可） |
-| ログイン画面・許可ドメイン判定・未認証 401 | ✅ 完了（Supabase 接続後に実機確認が必要） |
-| DB スキーマ（`supabase/migrations/0001_init.sql`） | 📝 作成済み・未適用 |
-| Embedding 保存（`npm run ingest`） | ⏳ 未実装（要 Voyage / Supabase） |
-| 検索・回答生成（`src/lib/rag/pipeline.ts`） | ⏳ 未実装（現在 API は 501 を返す） |
-| 12 問評価スクリプト | ⏳ 未実装 |
+| PDF 抽出・正規化・チャンク分割 | ✅ 完了（`npm run ingest` で計画表示のみ、キー・DB 不要） |
+| ログイン画面・許可ドメイン判定・未認証 401 | ✅ 完了 |
+| DB スキーマ（`supabase/migrations/0001_init.sql`） | ✅ 適用済み（service_role のみ読み書き可） |
+| Embedding 保存（`npm run ingest -- --yes`） | ✅ 実装済み・**未実行**（DB は空） |
+| 検索・回答生成（`src/lib/rag/`） | ✅ 実装済み（出典付き回答 / 該当なし判定） |
+| 12 問評価スクリプト | ⏳ 未実装（取り込み後に feature/eval で実施） |
 
 ## コマンド
 
@@ -30,7 +30,11 @@ npm test             # 単体テスト（キー不要）
 npm run typecheck
 npm run ingest:dry   # PDF 抽出・チャンク分割の確認（キー不要、DB に書かない）。--full で本文も表示
 npm run eval:fix-csv # 教材 CSV を補正して data/eval/test-questions.csv を再生成
-npm run ingest       # Embedding を作成して Supabase に保存（要キー）
+npm run check:env    # 設定・Supabase 接続の確認（値は表示しない、読み取りのみ）
+npm run check:ai     # Voyage / Claude の最小接続確認
+npm run check:search # 質問 Embedding→検索（読み取り）と Claude 回答をダミー資料で確認
+npm run ingest       # 取り込み計画の表示のみ（API・DB に触れない）
+npm run ingest -- --yes  # Embedding を作成して Supabase に保存（ファイル単位で入れ替え）
 ```
 
 ## 構成
@@ -44,7 +48,8 @@ scripts/                   取り込み・CSV 補正・確認用スクリプト
 src/lib/types.ts           ブランチ間で共有する型（変更は main で）
 src/lib/ingest/            PDF 抽出・正規化・チャンク分割
 src/lib/auth/              許可ドメイン判定・認可チェック
-src/lib/rag/pipeline.ts    検索〜回答生成（未実装）
+src/lib/embedding/voyage.ts Voyage Embedding（文書=document / 質問=query）
+src/lib/rag/                検索（match_chunks）→ Claude 回答（構造化出力・出典検証）
 src/app/api/search/        検索 API（認可 → 入力検証 → pipeline）
 src/proxy.ts               セッション更新・未ログイン時のリダイレクト
 ```
@@ -56,6 +61,9 @@ src/proxy.ts               セッション更新・未ログイン時のリダ�
 - 認可の本判定は API / ページ側の `authorizeRequest()`（`getUser()` でトークン検証＋許可ドメイン）。`proxy.ts` は画面遷移用の楽観チェックのみ。
 - 許可ドメイン未設定時は誰もログインできない（fail-closed）。
 - `chunks` テーブルは RLS 有効・ポリシーなし。読み書きは認可済みサーバーから secret key 経由のみ。
+- 回答生成: 類似度しきい値（既定 0.3）を超える資料が 0 件なら Claude を呼ばずに「該当する情報が見つかりません」。
+  Claude には取得資料だけを `<sources>` で渡し、`found / answer / source_ids` の構造化出力で返させる。
+  出典は実際に取得した資料の id だけを採用し、有効な出典がなければ該当なしにする。
 
 ## 外部サービスの設定
 

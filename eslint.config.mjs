@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // git worktree（並列開発用の作業ツリー）は各ツリー内で個別に lint する
+    ".worktrees/**",
   ]),
 ]);
 
