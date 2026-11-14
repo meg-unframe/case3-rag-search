@@ -60,10 +60,19 @@ Embedding がすべて成功してから、ファイル単位で「削除 → �
 - Supabase プロジェクト（案件3専用、Region: Northeast Asia (Tokyo)）
 - Voyage AI と Anthropic（Claude Console）の API キー
 
-### 1. 依存関係のインストール
+### 1. 依存関係のインストールと教材の配置
 
 ```bash
 npm ci
+```
+
+講座提供の教材（PDF 5 本・テスト質問 CSV）は再配布しないためリポジトリに含めていない。配置方法は [`data/README.md`](data/README.md) を参照。
+
+```bash
+mkdir -p data/pdfs data/eval/raw
+cp <配布フォルダ>/case3-doc*.pdf data/pdfs/
+cp <配布フォルダ>/case3-test-questions.csv data/eval/raw/
+npm run eval:fix-csv   # 5・6 番の列ずれを補正して data/eval/test-questions.csv を生成
 ```
 
 ### 2. Supabase の準備
@@ -123,7 +132,7 @@ npm run dev   # http://localhost:3000
 ### 6. テストと評価
 
 ```bash
-npm test            # 単体テスト（81 件、キー不要）
+npm test            # 単体テスト（キー不要。教材を使うテストは配置時のみ実行）
 npm run typecheck
 npm run lint
 npm run eval        # 12 問評価（Voyage・Claude を各最大 12 回呼ぶ。約 4〜5 分）
@@ -155,7 +164,7 @@ npm run eval        # 12 問評価（Voyage・Claude を各最大 12 回呼ぶ�
 | case3-doc5-it-onboarding.pdf | 2 | 8 |
 | **合計 5 ファイル** | **9** | **34** |
 
-テスト質問: `data/eval/test-questions.csv`（答えあり 10 問 + 答えなし 2 問）。教材 CSV（`data/eval/raw/`）は 5・6 番の「期待される回答」が金額のカンマ（3,000円 / 5,000円）で 2 列に分かれていたため、結合して 6 列にそろえた。
+テスト質問: 講座提供の CSV 12 問（答えあり 10 問 + 答えなし 2 問）。教材 CSV は 5・6 番の「期待される回答」が金額のカンマ（3,000円 / 5,000円）で 2 列に分かれていたため、結合して 6 列にそろえた。
 
 ### 評価時の設定
 
@@ -209,7 +218,7 @@ npm run eval        # 12 問評価（Voyage・Claude を各最大 12 回呼ぶ�
 - 1 問目のみ検索が 1.2 秒（初回接続）。2 問目以降は 0.1〜0.2 秒。
 - 問題数が少ないため、しきい値の変更は評価データを増やしてから判断する。
 
-詳細: `data/eval/results/eval-2026-11-14T12-01-15-281Z.json`
+評価結果の JSON（`data/eval/results/`）は教材の質問文を含むため公開リポジトリには含めていない。
 
 ## 設計とセキュリティ
 
@@ -243,11 +252,12 @@ npm run eval        # 12 問評価（Voyage・Claude を各最大 12 回呼ぶ�
 ## ディレクトリ構成
 
 ```
-data/pdfs/                    教材 PDF 5 本
-data/eval/raw/                教材 CSV（原本・未補正）
-data/eval/test-questions.csv  補正済みテスト質問 12 問
+data/README.md                教材の配置方法
+data/pdfs/                    教材 PDF 5 本（Git 管理外・各自配置）
+data/eval/raw/                教材 CSV 原本（Git 管理外・各自配置）
+data/eval/test-questions.csv  補正済みテスト質問 12 問（Git 管理外・eval:fix-csv で生成）
 data/eval/key-facts.json      採点用の必須要素
-data/eval/results/            評価結果（JSON）
+data/eval/results/            評価結果 JSON（Git 管理外）
 supabase/migrations/          DB スキーマ（SQL Editor で適用）
 scripts/                      取り込み・評価・接続確認スクリプト
 src/proxy.ts                  セッション更新・未ログイン時のリダイレクト

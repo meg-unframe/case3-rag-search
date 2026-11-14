@@ -45,3 +45,10 @@ next-env.d.ts
 
 # git worktree（並列開発用の作業ツリー）
 /.worktrees/
+
+# 講座提供の教材（再配布しない。配置方法は data/README.md）
+/data/pdfs/*.pdf
+/data/eval/raw/
+/data/eval/test-questions.csv
+# 評価結果は教材の質問文を含むためローカルのみ（要約は README に記載）
+/data/eval/results/

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Chunk } from "@/lib/types";
@@ -89,7 +89,10 @@ describe("isNotFoundResponse", () => {
   });
 });
 
-describe("評価データの整合性", () => {
+// テスト質問 CSV は教材のため Git に含めない。配置されているときだけ実行する（data/README.md）
+const hasQuestions = existsSync(join(process.cwd(), "data/eval/test-questions.csv"));
+
+describe.skipIf(!hasQuestions)("評価データの整合性（配置時のみ）", () => {
   it("答えがある 10 問すべてに必須要素が定義され、期待回答に含まれている", () => {
     const qs = toTestQuestions(parseCsv(readFileSync(join(process.cwd(), "data/eval/test-questions.csv"), "utf8")));
     const facts = JSON.parse(readFileSync(join(process.cwd(), "data/eval/key-facts.json"), "utf8")) as Record<string, string[]>;

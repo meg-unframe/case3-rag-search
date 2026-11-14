@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { PageText } from "@/lib/types";
@@ -76,8 +77,12 @@ describe("toRows", () => {
   });
 });
 
-describe("教材 PDF（キー不要・DB 不使用）", () => {
-  const dir = join(process.cwd(), "data/pdfs");
+// 教材 PDF は再配布しないため Git に含めない。data/pdfs に配置されているときだけ実行する（data/README.md）
+const PDF_DIR = join(process.cwd(), "data/pdfs");
+const hasPdfs = existsSync(join(PDF_DIR, "case3-doc1-employment-rules.pdf"));
+
+describe.skipIf(!hasPdfs)("教材 PDF（キー不要・DB 不使用、配置時のみ）", () => {
+  const dir = PDF_DIR;
   it.each([
     ["case3-doc1-employment-rules.pdf", 2],
     ["case3-doc2-expense-manual.pdf", 2],
