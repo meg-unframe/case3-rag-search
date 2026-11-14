@@ -1,8 +1,11 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authorizeRequest } from "@/lib/auth/session";
+import { VoyageError } from "@/lib/embedding/voyage";
 import { MissingEnvError, missingEnv } from "@/lib/env";
-import { answerQuestion, NotImplementedError } from "@/lib/rag/pipeline";
+import { AnswerGenerationError } from "@/lib/rag/generate";
+import { answerQuestion } from "@/lib/rag/pipeline";
 import type { ApiError, SearchResponse } from "@/lib/types";
 
 const body = z.object({ question: z.string().trim().min(1).max(500) });
@@ -10,7 +13,7 @@ const body = z.object({ question: z.string().trim().min(1).max(500) });
 const err = (status: number, error: string) => NextResponse.json<ApiError>({ error }, { status });
 
 export async function POST(request: Request) {
-  // 1. 認可を最初に行う（未認証は API キーの有無に関係なく 401）
+  // 1. 認可を最初に行う（未認証は API キーの有無に関係なく 401、許可外ドメインは 403）
   const auth = await authorizeRequest();
   if (!auth.ok) return err(auth.status, auth.reason);
 
@@ -27,9 +30,17 @@ export async function POST(request: Request) {
     const result = await answerQuestion(parsed.data.question);
     return NextResponse.json<SearchResponse>(result);
   } catch (e) {
-    if (e instanceof NotImplementedError) return err(501, e.message);
+    // ログには種類とステータスだけを残す（質問文・キー・資料本文は出さない）
     if (e instanceof MissingEnvError) return err(503, "検索機能の設定が未完了です");
-    console.error("[api/search]", e instanceof Error ? e.message : e);
+    if (e instanceof AnswerGenerationError) return err(502, e.message);
+    if (e instanceof Anthropic.RateLimitError || (e instanceof VoyageError && e.status === 429)) {
+      return err(429, "混み合っています。少し時間をおいて再度お試しください");
+    }
+    if (e instanceof Anthropic.APIError || e instanceof VoyageError) {
+      console.error("[api/search] upstream", e.name, e.status);
+      return err(502, "回答の生成に失敗しました。時間をおいて再度お試しください");
+    }
+    console.error("[api/search]", e instanceof Error ? e.name : "unknown");
     return err(500, "検索中にエラーが発生しました");
   }
 }
