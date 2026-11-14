@@ -52,3 +52,6 @@ next-env.d.ts
 /data/eval/test-questions.csv
 # 評価結果は教材の質問文を含むためローカルのみ（要約は README に記載）
 /data/eval/results/
+
+# Vercel 用の環境変数ファイル（秘密情報を含む。GitHub に登録しない）
+/vercel.env

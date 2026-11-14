@@ -6,15 +6,19 @@ import { VoyageError } from "@/lib/embedding/voyage";
 import { MissingEnvError, missingEnv } from "@/lib/env";
 import { AnswerGenerationError } from "@/lib/rag/generate";
 import { answerQuestion } from "@/lib/rag/pipeline";
+import { createTimer } from "@/lib/timing";
 import type { ApiError, SearchResponse } from "@/lib/types";
 
 const body = z.object({ question: z.string().trim().min(1).max(500) });
 
-const err = (status: number, error: string) => NextResponse.json<ApiError>({ error }, { status });
-
 export async function POST(request: Request) {
+  // 処理時間の内訳（auth / embed / search / generate / total）を Server-Timing で返す
+  const timer = createTimer();
+  const err = (status: number, error: string) =>
+    NextResponse.json<ApiError>({ error }, { status, headers: { "Server-Timing": timer.header() } });
+
   // 1. 認可を最初に行う（未認証は API キーの有無に関係なく 401、許可外ドメインは 403）
-  const auth = await authorizeRequest();
+  const auth = await timer.measure("auth", () => authorizeRequest());
   if (!auth.ok) return err(auth.status, auth.reason);
 
   // 2. 入力検証
@@ -27,8 +31,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await answerQuestion(parsed.data.question);
-    return NextResponse.json<SearchResponse>(result);
+    const result = await answerQuestion(parsed.data.question, timer);
+    return NextResponse.json<SearchResponse>(result, { headers: { "Server-Timing": timer.header() } });
   } catch (e) {
     // ログには種類とステータスだけを残す（質問文・キー・資料本文は出さない）
     if (e instanceof MissingEnvError) return err(503, "検索機能の設定が未完了です");
