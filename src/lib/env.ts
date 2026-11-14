@@ -49,8 +49,20 @@ export const RETRIEVAL = {
 export const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-5-5";
 
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
-type Effort = (typeof EFFORTS)[number];
-/** 短い資料からの事実回答なので low を既定にする（評価で品質を見て調整） */
-export const CLAUDE_EFFORT: Effort = (EFFORTS as readonly string[]).includes(process.env.CLAUDE_EFFORT ?? "")
-  ? (process.env.CLAUDE_EFFORT as Effort)
-  : "low";
+export type Effort = (typeof EFFORTS)[number];
+
+/** 12 問評価（2026-11-14、10/10・2/2・全問 5 秒以内）を実施した設定 */
+export const DEFAULT_ANSWER_EFFORT: Effort = "medium";
+
+/**
+ * 回答生成の思考の深さ。アプリ専用の RAG_CLAUDE_EFFORT だけを読む。
+ * ※ CLAUDE_EFFORT は Claude Code など外部ツールが環境に設定することがあるため読まない
+ *   （以前はこれを読んでいて、意図せず既定値が上書きされていた）。
+ * 不正な値は既定値に戻す。
+ */
+export function resolveAnswerEffort(env: Record<string, string | undefined> = process.env): Effort {
+  const v = env.RAG_CLAUDE_EFFORT?.trim() ?? "";
+  return (EFFORTS as readonly string[]).includes(v) ? (v as Effort) : DEFAULT_ANSWER_EFFORT;
+}
+
+export const ANSWER_EFFORT: Effort = resolveAnswerEffort();

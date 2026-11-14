@@ -1,7 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { CLAUDE_EFFORT, CLAUDE_MODEL } from "@/lib/env";
+import { ANSWER_EFFORT, CLAUDE_MODEL } from "@/lib/env";
 import type { RetrievedChunk } from "@/lib/types";
 import { AnswerSchema, buildUserContent, type ModelAnswer, SYSTEM_PROMPT } from "./prompt";
 
@@ -26,7 +26,7 @@ export async function generateAnswer(question: string, chunks: RetrievedChunk[])
     max_tokens: 8000,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
-    output_config: { effort: CLAUDE_EFFORT, format: betaZodOutputFormat(AnswerSchema) },
+    output_config: { effort: ANSWER_EFFORT, format: betaZodOutputFormat(AnswerSchema) },
     system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: buildUserContent(question, chunks) }],
   });

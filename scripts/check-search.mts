@@ -6,9 +6,11 @@ import { answerWith } from "@/lib/rag/answer";
 import { generateAnswer } from "@/lib/rag/generate";
 import { matchChunks } from "@/lib/rag/retrieve";
 import { embedQuery } from "@/lib/embedding/voyage";
-import { RETRIEVAL } from "@/lib/env";
+import { ANSWER_EFFORT, CLAUDE_MODEL, RETRIEVAL } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { NOT_FOUND_MESSAGE, type RetrievedChunk } from "@/lib/types";
+
+console.log(`設定: model=${CLAUDE_MODEL} / effort=${ANSWER_EFFORT}（RAG_CLAUDE_EFFORT${process.env.RAG_CLAUDE_EFFORT ? "" : " 未設定 → 既定値"}）/ しきい値 ${RETRIEVAL.matchThreshold} / 上位 ${RETRIEVAL.matchCount} 件\n`);
 
 let failed = 0;
 const report = (ok: boolean, msg: string) => {
@@ -33,7 +35,7 @@ const report = (ok: boolean, msg: string) => {
       return { found: false, answer: NOT_FOUND_MESSAGE, source_ids: [] };
     },
   });
-  console.log(`[実経路] 検索ヒット ${hits} 件（しきい値 ${RETRIEVAL.matchThreshold}）/ Claude 呼び出し: ${claudeCalled ? "あり" : "なし"}`);
+  console.log(`[実経路] 検索ヒット ${hits} 件（しきい値 ${RETRIEVAL.matchThreshold}）/ 回答生成（この確認ではスタブ）の呼び出し: ${claudeCalled ? "あり" : "なし"}`);
   if (hits === 0) report(res.answer === NOT_FOUND_MESSAGE && !claudeCalled, `0 件 → Claude を呼ばず「${res.answer}」`);
   else report(true, `ヒットあり（取り込み済みの DB）→ 判定: ${res.found ? "回答" : "該当なし"}`);
 }

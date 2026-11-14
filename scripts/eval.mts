@@ -9,7 +9,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { embedQuery, VoyageError } from "@/lib/embedding/voyage";
-import { CLAUDE_EFFORT, CLAUDE_MODEL, EMBEDDING, RETRIEVAL } from "@/lib/env";
+import { ANSWER_EFFORT, CLAUDE_MODEL, EMBEDDING, RETRIEVAL } from "@/lib/env";
 import { expectedPages, gradeCitations, gradeFacts, isNotFoundResponse } from "@/lib/eval/grade";
 import { parseCsv, toTestQuestions } from "@/lib/eval/test-questions";
 import { extractPdfPages } from "@/lib/ingest/extract";
@@ -95,7 +95,7 @@ async function runOnce(question: string) {
   };
 }
 
-console.log(`評価開始: ${questions.length} 問 / model=${CLAUDE_MODEL} effort=${CLAUDE_EFFORT} / ${EMBEDDING.model} / しきい値 ${RETRIEVAL.matchThreshold} 上位 ${RETRIEVAL.matchCount} 件 / 間隔 ${PACE_MS}ms\n`);
+console.log(`評価開始: ${questions.length} 問 / model=${CLAUDE_MODEL} effort=${ANSWER_EFFORT} / ${EMBEDDING.model} / しきい値 ${RETRIEVAL.matchThreshold} 上位 ${RETRIEVAL.matchCount} 件 / 間隔 ${PACE_MS}ms\n`);
 const records: Record_[] = [];
 
 for (const [i, q] of questions.entries()) {
@@ -166,7 +166,7 @@ const summary = {
     pageCorrect: ans.filter((r) => r.citation?.pageCorrect).length,
   },
   latencyMs: times.length ? { min: times[0], median: pct(50), p90: pct(90), max: times.at(-1), withinTarget: ok.filter((r) => r.withinTarget).length } : null,
-  config: { model: CLAUDE_MODEL, effort: CLAUDE_EFFORT, embedding: EMBEDDING.model, threshold: RETRIEVAL.matchThreshold, topK: RETRIEVAL.matchCount, targetMs: TARGET_MS },
+  config: { model: CLAUDE_MODEL, effort: ANSWER_EFFORT, embedding: EMBEDDING.model, threshold: RETRIEVAL.matchThreshold, topK: RETRIEVAL.matchCount, targetMs: TARGET_MS },
 };
 
 console.log(`\n=== 集計（未評価・エラーは分母から除外） ===`);
