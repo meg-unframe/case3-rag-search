@@ -15,7 +15,8 @@
     "check:env": "tsx --env-file-if-exists=.env.local scripts/check-env.mts",
     "check:ai": "tsx --env-file-if-exists=.env.local scripts/check-ai.mts",
     "check:search": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/check-search.mts",
-    "check:ingest": "tsx --env-file-if-exists=.env.local scripts/check-ingest.mts"
+    "check:ingest": "tsx --env-file-if-exists=.env.local scripts/check-ingest.mts",
+    "eval": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/eval.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
