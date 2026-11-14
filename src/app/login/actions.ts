@@ -1,24 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { z } from "zod";
 import { isEmailAllowed, parseAllowedDomains } from "@/lib/auth/allowed-domains";
+import { parseCredentials as parse, signInSchema, signUpSchema } from "@/lib/auth/credentials";
 import { missingEnv } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type LoginState = { error?: string; message?: string };
-
-const credentials = z.object({
-  email: z.email("メールアドレスの形式が正しくありません"),
-  password: z.string().min(8, "パスワードは8文字以上にしてください"),
-});
-
-function parse(formData: FormData) {
-  return credentials.safeParse({
-    email: String(formData.get("email") ?? "").trim(),
-    password: String(formData.get("password") ?? ""),
-  });
-}
 
 function checkConfigured(): string | undefined {
   if (missingEnv("supabasePublic", "auth").length > 0) {
@@ -35,7 +23,7 @@ function checkDomain(email: string): string | undefined {
 export async function signIn(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const notReady = checkConfigured();
   if (notReady) return { error: notReady };
-  const parsed = parse(formData);
+  const parsed = parse(signInSchema, formData);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const domainError = checkDomain(parsed.data.email);
   if (domainError) return { error: domainError };
@@ -50,7 +38,7 @@ export async function signIn(_prev: LoginState, formData: FormData): Promise<Log
 export async function signUp(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const notReady = checkConfigured();
   if (notReady) return { error: notReady };
-  const parsed = parse(formData);
+  const parsed = parse(signUpSchema, formData);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const domainError = checkDomain(parsed.data.email);
   if (domainError) return { error: domainError };

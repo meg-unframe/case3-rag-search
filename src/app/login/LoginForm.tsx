@@ -37,12 +37,13 @@ export function LoginForm() {
           />
         </label>
         <label className="block text-sm">
-          パスワード（8文字以上）
+          {mode === "signin" ? "パスワード" : "パスワード（8文字以上）"}
           <input
+            key={mode} // タブ切り替え時に入力欄を作り直し、minLength の有無を確実に反映する
             name="password"
             type="password"
             autoComplete={mode === "signin" ? "current-password" : "new-password"}
-            minLength={8}
+            minLength={mode === "signup" ? 8 : undefined}
             required
             className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-700"
           />

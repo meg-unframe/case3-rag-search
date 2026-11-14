@@ -11,7 +11,9 @@
     "test": "vitest run",
     "eval:fix-csv": "tsx --env-file-if-exists=.env.local scripts/fix-test-questions.mts",
     "ingest:dry": "tsx scripts/inspect-chunks.mts",
-    "ingest": "tsx --env-file-if-exists=.env.local scripts/ingest.mts"
+    "ingest": "tsx --env-file-if-exists=.env.local scripts/ingest.mts",
+    "check:env": "tsx --env-file-if-exists=.env.local scripts/check-env.mts",
+    "check:ai": "tsx --env-file-if-exists=.env.local scripts/check-ai.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
