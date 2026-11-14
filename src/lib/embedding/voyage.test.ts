@@ -67,3 +67,21 @@ describe("embedTexts", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
+
+describe("embedTexts の再試行間隔", () => {
+  beforeEach(() => vi.stubEnv("VOYAGE_API_KEY", "test-key"));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("baseDelayMs を基準に倍々で待つ（retry-after が無い場合）", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("", { status: 429 }))
+      .mockResolvedValueOnce(new Response("", { status: 429 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ embedding: Array(EMBEDDING.dimension).fill(0), index: 0 }] }), { status: 200 }),
+      );
+    const sleep = vi.fn(async () => {});
+    await embedQuery("q", { fetchImpl, sleep, maxRetries: 4, baseDelayMs: 20_000 });
+    expect(sleep.mock.calls.map((c) => (c as unknown as [number])[0])).toEqual([20_000, 40_000]);
+  });
+});

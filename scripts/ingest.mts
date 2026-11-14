@@ -56,7 +56,8 @@ for (const f of files) {
   try {
     const r = await ingestFile(join(DIR, f), {
       extract: extractPdfPages,
-      embedDocuments: (texts) => embedTexts(texts, "document"),
+      // 無料枠の RPM 制限（429）に備え、20 → 40 → 80 → 160 秒待って再試行する
+      embedDocuments: (texts) => embedTexts(texts, "document", { maxRetries: 4, baseDelayMs: 20_000 }),
       store,
     });
     ok++;

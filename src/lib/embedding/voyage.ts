@@ -23,6 +23,8 @@ export type EmbedOptions = {
   batchSize?: number;
   /** 429 / 5xx の再試行回数 */
   maxRetries?: number;
+  /** 再試行の待ち時間の基準（attempt ごとに 2 倍）。無料枠の RPM 制限には長め（例: 20 秒）を指定する */
+  baseDelayMs?: number;
   fetchImpl?: FetchLike;
   sleep?: (ms: number) => Promise<void>;
 };
@@ -36,7 +38,7 @@ const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 export async function embedTexts(
   texts: string[],
   inputType: InputType,
-  { batchSize = 64, maxRetries = 2, fetchImpl = fetch, sleep = defaultSleep }: EmbedOptions = {},
+  { batchSize = 64, maxRetries = 2, baseDelayMs = 500, fetchImpl = fetch, sleep = defaultSleep }: EmbedOptions = {},
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
   requireEnv("voyage");
@@ -45,7 +47,7 @@ export async function embedTexts(
   const out: number[][] = [];
   for (let start = 0; start < texts.length; start += batchSize) {
     const batch = texts.slice(start, start + batchSize);
-    const vectors = await requestWithRetry(batch, inputType, apiKey, fetchImpl, sleep, maxRetries);
+    const vectors = await requestWithRetry(batch, inputType, apiKey, fetchImpl, sleep, maxRetries, baseDelayMs);
     out.push(...vectors);
   }
   return out;
@@ -63,6 +65,7 @@ async function requestWithRetry(
   fetchImpl: FetchLike,
   sleep: (ms: number) => Promise<void>,
   maxRetries: number,
+  baseDelayMs: number,
 ): Promise<number[][]> {
   for (let attempt = 0; ; attempt++) {
     let res: Response;
@@ -74,7 +77,7 @@ async function requestWithRetry(
       });
     } catch (e) {
       if (attempt < maxRetries) {
-        await sleep(500 * 2 ** attempt);
+        await sleep(baseDelayMs * 2 ** attempt);
         continue;
       }
       throw new VoyageError(`Voyage への通信に失敗しました（${e instanceof Error ? e.name : "unknown"}）`);
@@ -85,7 +88,7 @@ async function requestWithRetry(
     const retryable = res.status === 429 || res.status >= 500;
     if (retryable && attempt < maxRetries) {
       const retryAfter = Number(res.headers.get("retry-after"));
-      await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 500 * 2 ** attempt);
+      await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : baseDelayMs * 2 ** attempt);
       continue;
     }
     // エラー本文にキーは含まれないが、ログに残す量は最小限にする
