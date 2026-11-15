@@ -36,6 +36,8 @@ const run = JSON.parse(await readFile(input, "utf8")) as {
   records: BrowserRecord[];
   mode?: "ui";
   displayMs?: number;
+  readyMs?: number;
+  scriptVersion?: number;
   warmup?: { ms: number; status: number | null; serverTiming: string | null } | null;
   immediate?: BrowserRecord;
 };
@@ -52,6 +54,8 @@ function gradeRecord(q: (typeof questions)[number], r: BrowserRecord | undefined
   if (!r) return { no: q.no, status: "未実行" as const };
   const retries429 = r.attempts.filter((a) => a.status === 429).length;
   if (r.status === 429) return { no: q.no, status: "未評価(429)" as const, retries429 };
+  // 送信されず応答も記録されなかった（計測スクリプト側の失敗）。不正解には数えない
+  if (r.status === 0 && r.ms == null) return { no: q.no, status: "未評価(計測失敗)" as const, retries429, error: r.error };
   if (r.status !== 200 || !r.body || "error" in r.body || r.ms == null) {
     return { no: q.no, status: "エラー" as const, http: r.status, error: r.body?.error ?? r.error, ms: r.ms, retries429 };
   }
@@ -73,7 +77,7 @@ function gradeRecord(q: (typeof questions)[number], r: BrowserRecord | undefined
 type Graded = ReturnType<typeof gradeRecord>;
 
 function line(g: Graded, label = `Q${g.no}`): string {
-  if (g.status !== "ok") return `${label} [${g.status}]${"http" in g ? ` HTTP ${g.http} ${g.error ?? ""}` : ""}`;
+  if (g.status !== "ok") return `${label} [${g.status}]${"http" in g ? ` HTTP ${g.http}` : ""}${"error" in g && g.error ? ` ${g.error}` : ""}`;
   const split = g.waitMs != null ? `（準備待ち ${g.waitMs} + API ${g.fetchMs}）` : "";
   const t = `${g.ms}ms${split}(${g.withinTarget ? "5秒以内" : "5秒超"})${g.region ? ` [${g.region}]` : ""}${g.server ? ` {${g.server}}` : ""}`;
   if (g.kind === "not_found") return `${label} 該当なし:${mark(g.notFoundCorrect)} ${t} 「${g.answer.slice(0, 30)}」`;
@@ -85,7 +89,7 @@ const immediate = run.immediate ? gradeRecord(questions[0], run.immediate) : nul
 
 console.log(`本番評価（ブラウザ計測）: ${run.origin} / 実行 ${run.ranAt}\n`);
 if (run.mode === "ui") {
-  console.log(`[チャット画面での計測] 画面表示 ${run.displayMs} ms / 準備（warmup）${run.warmup ? `${run.warmup.ms} ms（HTTP ${run.warmup.status}）{${run.warmup.serverTiming ?? "-"}}` : "記録なし"}`);
+  console.log(`[チャット画面での計測 v${run.scriptVersion ?? 1}] 画面表示 ${run.displayMs} ms${run.readyMs != null ? ` / 操作可能 ${run.readyMs} ms` : ""} / 準備（warmup）${run.warmup ? `${run.warmup.ms} ms（HTTP ${run.warmup.status}）{${run.warmup.serverTiming ?? "-"}}` : "記録なし"}`);
   if (immediate) console.log(line(immediate, "表示直後のQ1"));
   console.log("");
 }
@@ -104,8 +108,8 @@ if (times.length) {
   const med = times[Math.floor((times.length - 1) / 2)];
   console.log(`応答時間（ブラウザ・通信と認証を含む）: 最小 ${times[0]} / 中央値 ${med} / 最大 ${times.at(-1)} ms（5秒以内 ${ok.filter((g) => g.withinTarget).length}/${ok.length}）`);
 }
-console.log(`未評価(429): ${graded.filter((g) => g.status === "未評価(429)").map((g) => `Q${g.no}`).join(", ") || "なし"} / エラー: ${graded.filter((g) => g.status === "エラー").map((g) => `Q${g.no}`).join(", ") || "なし"} / 未実行: ${graded.filter((g) => g.status === "未実行").map((g) => `Q${g.no}`).join(", ") || "なし"}`);
+console.log(`未評価(429): ${graded.filter((g) => g.status === "未評価(429)").map((g) => `Q${g.no}`).join(", ") || "なし"} / 未評価(計測失敗): ${graded.filter((g) => g.status === "未評価(計測失敗)").map((g) => `Q${g.no}`).join(", ") || "なし"} / エラー: ${graded.filter((g) => g.status === "エラー").map((g) => `Q${g.no}`).join(", ") || "なし"} / 未実行: ${graded.filter((g) => g.status === "未実行").map((g) => `Q${g.no}`).join(", ") || "なし"}`);
 
 const out = join("data/eval/results", `prod-eval-graded-${run.ranAt.replace(/[:.]/g, "-")}.json`);
-await writeFile(out, JSON.stringify({ origin: run.origin, ranAt: run.ranAt, userAgent: run.userAgent, mode: run.mode ?? "fetch", displayMs: run.displayMs ?? null, warmup: run.warmup ?? null, immediate, graded }, null, 2) + "\n", "utf8");
+await writeFile(out, JSON.stringify({ origin: run.origin, ranAt: run.ranAt, userAgent: run.userAgent, mode: run.mode ?? "fetch", scriptVersion: run.scriptVersion ?? null, displayMs: run.displayMs ?? null, readyMs: run.readyMs ?? null, warmup: run.warmup ?? null, immediate, graded }, null, 2) + "\n", "utf8");
 console.log(`\n採点結果: ${out}`);
