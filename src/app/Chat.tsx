@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { ApiError, SearchResponse } from "@/lib/types";
 
 type Turn =
@@ -8,10 +8,31 @@ type Turn =
   | { role: "assistant"; result: SearchResponse }
   | { role: "error"; text: string };
 
+// 準備中に質問が送られたら、準備の完了をこの時間まで待ってから送る（起動直後の関数を 2 つ立ち上げないため）
+const WARMUP_WAIT_LIMIT_MS = 8000;
+
 export function Chat() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
+  const warmup = useRef<Promise<void> | null>(null);
+
+  // 画面表示時に 1 回だけ、関数の起動と認証・Supabase への接続を準備する（Voyage・Claude は呼ばない）。
+  // 所要時間は performance.measure("case3:warmup") に記録する（失敗しても画面の動作には影響しない）。
+  useEffect(() => {
+    if (warmup.current) return;
+    const start = performance.now();
+    warmup.current = fetch("/api/warmup", { method: "POST", cache: "no-store" })
+      .then((res) => {
+        performance.measure("case3:warmup", {
+          start,
+          detail: { status: res.status, serverTiming: res.headers.get("server-timing") },
+        });
+      })
+      .catch(() => {
+        performance.measure("case3:warmup", { start, detail: { status: 0, serverTiming: null } });
+      });
+  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -20,13 +41,30 @@ export function Chat() {
     setTurns((t) => [...t, { role: "user", text: q }]);
     setQuestion("");
     setLoading(true);
+    const sent = performance.now();
     try {
+      if (warmup.current) {
+        await Promise.race([warmup.current, new Promise((r) => setTimeout(r, WARMUP_WAIT_LIMIT_MS))]);
+      }
+      const fetchStart = performance.now();
       const res = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: q }),
       });
       const body = (await res.json()) as SearchResponse | ApiError;
+      // 送信から応答までを記録（うち準備待ち waitMs と API 通信 fetchMs）
+      const end = performance.now();
+      performance.measure("case3:ask", {
+        start: sent,
+        end,
+        detail: {
+          waitMs: Math.round(fetchStart - sent),
+          fetchMs: Math.round(end - fetchStart),
+          status: res.status,
+          serverTiming: res.headers.get("server-timing"),
+        },
+      });
       if (!res.ok || "error" in body) {
         setTurns((t) => [...t, { role: "error", text: "error" in body ? body.error : `エラー (${res.status})` }]);
       } else {

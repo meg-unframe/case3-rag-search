@@ -24,9 +24,21 @@ type BrowserRecord = {
   error: string | null;
   serverTiming?: string | null;
   region?: string | null;
-  attempts: { status: number; ms: number; error: string | null }[];
+  /** 画面操作での計測（mode: "ui"）のみ: 送信→応答のうち準備待ちと API 通信 */
+  waitMs?: number | null;
+  fetchMs?: number | null;
+  attempts: { status: number; ms: number | null; error?: string | null }[];
 };
-const run = JSON.parse(await readFile(input, "utf8")) as { origin: string; ranAt: string; userAgent: string; records: BrowserRecord[] };
+const run = JSON.parse(await readFile(input, "utf8")) as {
+  origin: string;
+  ranAt: string;
+  userAgent: string;
+  records: BrowserRecord[];
+  mode?: "ui";
+  displayMs?: number;
+  warmup?: { ms: number; status: number | null; serverTiming: string | null } | null;
+  immediate?: BrowserRecord;
+};
 
 const questions = toTestQuestions(parseCsv(await readFile("data/eval/test-questions.csv", "utf8")));
 const keyFacts = JSON.parse(await readFile("data/eval/key-facts.json", "utf8")) as Record<string, string[]>;
@@ -36,41 +48,48 @@ for (const f of ["case3-doc1-employment-rules", "case3-doc2-expense-manual", "ca
 }
 
 const mark = (b?: boolean) => (b === undefined ? "－" : b ? "○" : "×");
-const graded = questions.map((q) => {
-  const r = run.records.find((x) => x.no === q.no);
+function gradeRecord(q: (typeof questions)[number], r: BrowserRecord | undefined) {
   if (!r) return { no: q.no, status: "未実行" as const };
   const retries429 = r.attempts.filter((a) => a.status === 429).length;
   if (r.status === 429) return { no: q.no, status: "未評価(429)" as const, retries429 };
-  if (r.status !== 200 || !r.body || "error" in r.body) {
+  if (r.status !== 200 || !r.body || "error" in r.body || r.ms == null) {
     return { no: q.no, status: "エラー" as const, http: r.status, error: r.body?.error ?? r.error, ms: r.ms, retries429 };
   }
   const body = r.body;
   const withinTarget = r.ms <= TARGET_MS;
-  const server = r.serverTiming ?? null;
-  const region = r.region ?? null;
+  const timing = { server: r.serverTiming ?? null, region: r.region ?? null, waitMs: r.waitMs ?? null, fetchMs: r.fetchMs ?? null };
   if (q.expectNotFound) {
-    return { no: q.no, status: "ok" as const, kind: "not_found", ms: r.ms, withinTarget, retries429, server, region, notFoundCorrect: isNotFoundResponse(body), answer: body.answer, cited: [] as string[] };
+    return { no: q.no, status: "ok" as const, kind: "not_found" as const, ms: r.ms, withinTarget, retries429, ...timing, notFoundCorrect: isNotFoundResponse(body), answer: body.answer, cited: [] as string[] };
   }
   const facts = keyFacts[String(q.no)];
   const g = gradeFacts(body.found ? body.answer : "", facts);
   const c = gradeCitations(body.citations, expectedPages(q, facts, chunksByFile));
   return {
-    no: q.no, status: "ok" as const, kind: "answerable", ms: r.ms, withinTarget, retries429, server, region,
+    no: q.no, status: "ok" as const, kind: "answerable" as const, ms: r.ms, withinTarget, retries429, ...timing,
     answerCorrect: body.found && g.correct, missingFacts: g.missing,
     fileCorrect: c.fileCorrect, pageCorrect: c.pageCorrect, cited: c.cited, answer: body.answer,
   };
-});
+}
+type Graded = ReturnType<typeof gradeRecord>;
+
+function line(g: Graded, label = `Q${g.no}`): string {
+  if (g.status !== "ok") return `${label} [${g.status}]${"http" in g ? ` HTTP ${g.http} ${g.error ?? ""}` : ""}`;
+  const split = g.waitMs != null ? `（準備待ち ${g.waitMs} + API ${g.fetchMs}）` : "";
+  const t = `${g.ms}ms${split}(${g.withinTarget ? "5秒以内" : "5秒超"})${g.region ? ` [${g.region}]` : ""}${g.server ? ` {${g.server}}` : ""}`;
+  if (g.kind === "not_found") return `${label} 該当なし:${mark(g.notFoundCorrect)} ${t} 「${g.answer.slice(0, 30)}」`;
+  return `${label} 正答:${mark(g.answerCorrect)} 出典ファイル:${mark(g.fileCorrect)} ページ:${mark(g.pageCorrect)} ${t} 出典=${g.cited.join(", ") || "なし"}${g.missingFacts?.length ? ` 不足=${g.missingFacts.join("/")}` : ""}`;
+}
+
+const graded = questions.map((q) => gradeRecord(q, run.records.find((x) => x.no === q.no)));
+const immediate = run.immediate ? gradeRecord(questions[0], run.immediate) : null;
 
 console.log(`本番評価（ブラウザ計測）: ${run.origin} / 実行 ${run.ranAt}\n`);
-for (const g of graded) {
-  if (g.status !== "ok") {
-    console.log(`Q${g.no} [${g.status}]${"http" in g ? ` HTTP ${g.http} ${g.error ?? ""}` : ""}`);
-    continue;
-  }
-  const t = `${g.ms}ms(${g.withinTarget ? "5秒以内" : "5秒超"})${g.region ? ` [${g.region}]` : ""}${g.server ? ` {${g.server}}` : ""}`;
-  if (g.kind === "not_found") console.log(`Q${g.no} 該当なし:${mark(g.notFoundCorrect)} ${t} 「${g.answer.slice(0, 30)}」`);
-  else console.log(`Q${g.no} 正答:${mark(g.answerCorrect)} 出典ファイル:${mark(g.fileCorrect)} ページ:${mark(g.pageCorrect)} ${t} 出典=${g.cited.join(", ") || "なし"}${g.missingFacts?.length ? ` 不足=${g.missingFacts.join("/")}` : ""}`);
+if (run.mode === "ui") {
+  console.log(`[チャット画面での計測] 画面表示 ${run.displayMs} ms / 準備（warmup）${run.warmup ? `${run.warmup.ms} ms（HTTP ${run.warmup.status}）{${run.warmup.serverTiming ?? "-"}}` : "記録なし"}`);
+  if (immediate) console.log(line(immediate, "表示直後のQ1"));
+  console.log("");
 }
+for (const g of graded) console.log(line(g));
 
 const ok = graded.filter((g) => g.status === "ok");
 const ans = ok.filter((g) => g.kind === "answerable");
@@ -88,5 +107,5 @@ if (times.length) {
 console.log(`未評価(429): ${graded.filter((g) => g.status === "未評価(429)").map((g) => `Q${g.no}`).join(", ") || "なし"} / エラー: ${graded.filter((g) => g.status === "エラー").map((g) => `Q${g.no}`).join(", ") || "なし"} / 未実行: ${graded.filter((g) => g.status === "未実行").map((g) => `Q${g.no}`).join(", ") || "なし"}`);
 
 const out = join("data/eval/results", `prod-eval-graded-${run.ranAt.replace(/[:.]/g, "-")}.json`);
-await writeFile(out, JSON.stringify({ origin: run.origin, ranAt: run.ranAt, userAgent: run.userAgent, graded }, null, 2) + "\n", "utf8");
+await writeFile(out, JSON.stringify({ origin: run.origin, ranAt: run.ranAt, userAgent: run.userAgent, mode: run.mode ?? "fetch", displayMs: run.displayMs ?? null, warmup: run.warmup ?? null, immediate, graded }, null, 2) + "\n", "utf8");
 console.log(`\n採点結果: ${out}`);
